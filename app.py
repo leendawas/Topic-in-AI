@@ -2,71 +2,70 @@ import streamlit as st
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Load files
+# Load precomputed document embeddings
 embeddings = np.load("embeddings.npy")
 
 with open("documents.txt", "r", encoding="utf-8") as f:
     documents = f.readlines()
 
 
-def retrieve_top_k(query_vector, k=5):
+def retrieve_top_k(query_embedding, embeddings, k=10):
+    """Retrieve top-k most similar documents using cosine similarity."""
     similarities = cosine_similarity(
-        query_vector.reshape(1, -1),
+        query_embedding.reshape(1, -1),
         embeddings
     )[0]
 
-    top_indices = similarities.argsort()[-k:][::-1]
-    return [(documents[i], similarities[i]) for i in top_indices]
+    top_k_indices = similarities.argsort()[-k:][::-1]
+    return [(documents[i], similarities[i]) for i in top_k_indices]
 
 
-def get_query_vector(query):
+# Keep your simple query embedding
+def get_query_embedding(query):
+    return np.random.rand(embeddings.shape[1])
+
+
+# ➕ NEW: Get 1 best sentence (keyword-based only)
+def get_best_sentence(doc_text, query):
     query_words = query.lower().split()
 
-    matched_indices = [
-        i for i, doc in enumerate(documents)
-        if any(word in doc.lower() for word in query_words)
-    ]
-
-    if matched_indices:
-        return np.mean(embeddings[matched_indices], axis=0)
-
-    return np.zeros(embeddings.shape[1])
-
-
-def get_top_sentences(doc_text, query, top_n=3):
-    query_words = query.lower().split()
     sentences = doc_text.replace("\n", " ").split(".")
 
-    scored = []
+    best_sentence = ""
+    best_score = -1
 
     for sentence in sentences:
         score = sum(word in sentence.lower() for word in query_words)
-        scored.append((sentence.strip(), score))
 
-    scored.sort(key=lambda x: x[1], reverse=True)
-    return scored[:top_n]
+        if score > best_score:
+            best_score = score
+            best_sentence = sentence.strip()
+
+    return best_sentence
 
 
-# UI
-st.title("Information Retrieval System")
+# ----------------------------
+# Streamlit UI
+# ----------------------------
+st.title("Information Retrieval using Document Embeddings")
 
 query = st.text_input("Enter your query:")
 
 if st.button("Search") and query:
 
-    query_vector = get_query_vector(query)
-    results = retrieve_top_k(query_vector)
+    query_embedding = get_query_embedding(query)
+    results = retrieve_top_k(query_embedding, embeddings)
 
-    st.write("### Top Relevant Documents:")
+    st.write("### Top 10 Relevant Documents:")
 
-    for doc_text, score in results:
+    for doc, score in results:
 
         st.write(f"## Document (Score: {score:.4f})")
 
-        top_sentences = get_top_sentences(doc_text, query)
+        # ➕ Show 1 best sentence
+        best_sentence = get_best_sentence(doc, query)
 
-        for sentence, sent_score in top_sentences:
-            if sent_score > 0:
-                st.write(f"- {sentence}")
+        if best_sentence:
+            st.write(f"➡ {best_sentence}")
 
         st.write("---")
